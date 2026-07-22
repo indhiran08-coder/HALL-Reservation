@@ -81,10 +81,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
+        // Use setAllowedOriginPatterns (NOT setAllowedOrigins) — supports wildcards
+        configuration.setAllowedOriginPatterns(List.of(
             "http://localhost:5173",
             "http://localhost:3000",
-            "https://*.vercel.app"
+            "https://*.vercel.app",
+            "https://frontend-opal-two-56.vercel.app"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
