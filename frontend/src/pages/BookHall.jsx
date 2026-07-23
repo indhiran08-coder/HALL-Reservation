@@ -192,9 +192,6 @@ export default function BookHall() {
                       <div>
                         <p className="font-semibold text-white">{hall.hallName}</p>
                         <p className="text-slate-400 text-sm mt-0.5">📍 {hall.location}</p>
-                        {hall.capacity && (
-                          <p className="text-slate-500 text-xs mt-1">👥 Capacity: {hall.capacity}</p>
-                        )}
                       </div>
                       {String(form.hallId) === String(hall.id) && (
                         <CheckCircle2 className="w-5 h-5 text-primary-400 flex-shrink-0" />

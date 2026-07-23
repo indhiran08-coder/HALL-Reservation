@@ -18,10 +18,9 @@ export const hallAPI = {
           id: h.id,
           hallName: h.hall_name,
           location: h.location,
-          capacity: h.capacity,
           description: h.description,
           isActive: h.is_active,
-          currentlyBooked: false, // computed separately when needed
+          currentlyBooked: false,
         })),
       },
     };
@@ -40,7 +39,6 @@ export const hallAPI = {
           id: h.id,
           hallName: h.hall_name,
           location: h.location,
-          capacity: h.capacity,
           description: h.description,
           isActive: h.is_active,
         })),
@@ -74,7 +72,6 @@ export const hallAPI = {
         id: h.id,
         hallName: h.hall_name,
         location: h.location,
-        capacity: h.capacity,
         description: h.description,
       }));
 
@@ -88,7 +85,6 @@ export const hallAPI = {
       .insert({
         hall_name: hallData.hallName,
         location: hallData.location,
-        capacity: hallData.capacity || 0,
         description: hallData.description || '',
         is_active: true,
       })
@@ -105,7 +101,6 @@ export const hallAPI = {
       .update({
         hall_name: hallData.hallName,
         location: hallData.location,
-        capacity: hallData.capacity || 0,
         description: hallData.description || '',
       })
       .eq('id', id)

@@ -3,7 +3,7 @@ import { hallAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { Building2, Plus, Edit3, Trash2, X, Save, CheckCircle, XCircle } from 'lucide-react';
 
-const emptyForm = { hallName: '', location: '', description: '', capacity: '' };
+const emptyForm = { hallName: '', location: '', description: '' };
 
 export default function HallManagement() {
   const [halls, setHalls] = useState([]);
@@ -40,7 +40,6 @@ export default function HallManagement() {
       hallName: hall.hallName,
       location: hall.location || '',
       description: hall.description || '',
-      capacity: hall.capacity || '',
     });
     setShowModal(true);
   };
@@ -56,7 +55,6 @@ export default function HallManagement() {
         hallName: form.hallName.trim(),
         location: form.location.trim(),
         description: form.description.trim(),
-        capacity: form.capacity ? parseInt(form.capacity) : null,
       };
 
       if (editHall) {
@@ -113,9 +111,9 @@ export default function HallManagement() {
           {halls.map(hall => (
             <div key={hall.id}
               className={`card border transition-all duration-200
-                ${hall.active ? 'border-slate-700 hover:border-slate-500' : 'border-slate-800 opacity-60'}`}>
+                ${hall.isActive ? 'border-slate-700 hover:border-slate-500' : 'border-slate-800 opacity-60'}`}>
               {/* Status bar */}
-              <div className={`h-1 rounded-full mb-4 ${hall.active ? 'bg-gradient-to-r from-primary-500 to-blue-500' : 'bg-slate-700'}`} />
+              <div className={`h-1 rounded-full mb-4 ${hall.isActive ? 'bg-gradient-to-r from-primary-500 to-blue-500' : 'bg-slate-700'}`} />
 
               <div className="flex items-start justify-between mb-3">
                 <div>
@@ -124,7 +122,7 @@ export default function HallManagement() {
                     📍 {hall.location}
                   </p>
                 </div>
-                {hall.active
+                {hall.isActive
                   ? <span className="badge-green"><CheckCircle className="w-3.5 h-3.5" />Active</span>
                   : <span className="badge-red"><XCircle className="w-3.5 h-3.5" />Inactive</span>}
               </div>
@@ -133,13 +131,8 @@ export default function HallManagement() {
                 <p className="text-slate-500 text-sm mb-3 line-clamp-2">{hall.description}</p>
               )}
 
-              <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
-                {hall.capacity && (
-                  <span className="badge-blue">👥 {hall.capacity} seats</span>
-                )}
-              </div>
 
-              {hall.active && (
+              {hall.isActive && (
                 <div className="flex gap-2 pt-3 border-t border-slate-800">
                   <button onClick={() => openEdit(hall)}
                     className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center gap-1.5">
@@ -189,12 +182,6 @@ export default function HallManagement() {
                 <textarea value={form.description} rows={3}
                   onChange={e => setForm({ ...form, description: e.target.value })}
                   placeholder="Brief description of the hall" className="form-input resize-none" />
-              </div>
-              <div>
-                <label className="form-label">Seating Capacity</label>
-                <input type="number" value={form.capacity} min={1}
-                  onChange={e => setForm({ ...form, capacity: e.target.value })}
-                  placeholder="e.g., 100" className="form-input" />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">
