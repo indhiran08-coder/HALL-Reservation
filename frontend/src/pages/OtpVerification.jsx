@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Mail, RefreshCw, CheckCircle2, Building2 } from 'lucide-react';
 
@@ -8,19 +8,21 @@ export default function OtpVerification() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [countdown, setCountdown] = useState(120); // 2 min timer
+  const [countdown, setCountdown] = useState(300); // 5 min
   const inputRefs = useRef([]);
   const location = useLocation();
   const navigate = useNavigate();
+  const { verifyOtp, sendLoginOtp, sendRegisterOtp } = useAuth();
 
   const email = location.state?.email || '';
+  const mode = location.state?.mode || 'login'; // 'login' or 'register'
+  const regData = location.state?.regData; // for re-sending registration OTP
 
-  // Redirect if no email in state
   useEffect(() => {
-    if (!email) navigate('/register');
+    if (!email) navigate('/login');
+    else inputRefs.current[0]?.focus();
   }, [email, navigate]);
 
-  // Countdown timer for resend
   useEffect(() => {
     if (countdown <= 0) return;
     const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
@@ -28,11 +30,10 @@ export default function OtpVerification() {
   }, [countdown]);
 
   const handleOtpChange = (index, value) => {
-    if (!/^\d*$/.test(value)) return; // digits only
+    if (!/^\d*$/.test(value)) return;
     const newOtp = [...otp];
     newOtp[index] = value.slice(-1);
     setOtp(newOtp);
-    // Auto-advance
     if (value && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
@@ -53,19 +54,23 @@ export default function OtpVerification() {
   const handleVerify = async () => {
     const otpString = otp.join('');
     if (otpString.length !== 6) {
-      toast.error('Please enter the complete 6-digit OTP');
+      toast.error('Please enter the complete 6-digit code');
       return;
     }
     setLoading(true);
     try {
-      await authAPI.verifyOtp({ email, otp: otpString });
-      toast.success('Email verified! You can now log in.');
-      navigate('/login');
+      const { error } = await verifyOtp(email, otpString);
+      if (error) {
+        toast.error(error.message || 'Invalid code. Please try again.');
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+        return;
+      }
+      toast.success('✅ Verified! Welcome to VCET Hall Reservation.');
+      // Navigate based on role — AuthContext will redirect properly
+      navigate('/dashboard');
     } catch (err) {
-      const msg = err.response?.data?.message || 'Invalid OTP. Please try again.';
-      toast.error(msg);
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+      toast.error('Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -74,13 +79,19 @@ export default function OtpVerification() {
   const handleResend = async () => {
     setResending(true);
     try {
-      await authAPI.resendOtp(email);
-      toast.success('New OTP sent to your email!');
-      setCountdown(120);
+      let error;
+      if (mode === 'register' && regData) {
+        ({ error } = await sendRegisterOtp(regData));
+      } else {
+        ({ error } = await sendLoginOtp(email));
+      }
+      if (error) { toast.error(error.message || 'Failed to resend'); return; }
+      toast.success('New code sent to your email!');
+      setCountdown(300);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-    } catch (err) {
-      toast.error('Failed to resend OTP. Please try again.');
+    } catch {
+      toast.error('Failed to resend. Please try again.');
     } finally {
       setResending(false);
     }
@@ -91,7 +102,6 @@ export default function OtpVerification() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <div className="w-full max-w-md animate-slide-up">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-2">
             <Building2 className="w-8 h-8 text-primary-400" />
@@ -100,21 +110,18 @@ export default function OtpVerification() {
         </div>
 
         <div className="card text-center">
-          {/* Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 rounded-3xl bg-primary-900/50 border border-primary-700/50 
+            <div className="w-20 h-20 rounded-3xl bg-primary-900/50 border border-primary-700/50
                             flex items-center justify-center">
               <Mail className="w-10 h-10 text-primary-400" />
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Verify Your Email</h2>
-          <p className="text-slate-400 mb-2">
-            We've sent a 6-digit OTP to:
-          </p>
+          <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
+          <p className="text-slate-400 mb-2">We've sent a 6-digit code to:</p>
           <p className="text-primary-400 font-semibold mb-6">{email}</p>
 
-          {/* OTP Input Boxes */}
+          {/* OTP Input */}
           <div className="flex gap-3 justify-center mb-6" onPaste={handlePaste}>
             {otp.map((digit, index) => (
               <input
@@ -135,26 +142,23 @@ export default function OtpVerification() {
             ))}
           </div>
 
-          {/* Countdown */}
           <p className="text-slate-400 text-sm mb-6">
             {countdown > 0 ? (
-              <>OTP expires in <span className="text-primary-400 font-semibold">{formatCountdown(countdown)}</span></>
+              <>Code expires in <span className="text-primary-400 font-semibold">{formatCountdown(countdown)}</span></>
             ) : (
-              <span className="text-red-400">OTP has expired. Please request a new one.</span>
+              <span className="text-red-400">Code has expired. Please request a new one.</span>
             )}
           </p>
 
-          {/* Verify Button */}
           <button onClick={handleVerify} disabled={loading || otp.join('').length !== 6}
             className="btn-primary w-full mb-4">
             {loading ? (
               <><span className="spinner" /> Verifying...</>
             ) : (
-              <><CheckCircle2 className="w-5 h-5" /> Verify OTP</>
+              <><CheckCircle2 className="w-5 h-5" /> Verify Code</>
             )}
           </button>
 
-          {/* Resend */}
           <button onClick={handleResend}
             disabled={resending || countdown > 0}
             className="btn-secondary w-full disabled:opacity-40">
@@ -162,7 +166,7 @@ export default function OtpVerification() {
               <><span className="spinner" /> Sending...</>
             ) : (
               <><RefreshCw className="w-4 h-4" />
-                {countdown > 0 ? `Resend in ${formatCountdown(countdown)}` : 'Resend OTP'}</>
+                {countdown > 0 ? `Resend in ${formatCountdown(countdown)}` : 'Resend Code'}</>
             )}
           </button>
 

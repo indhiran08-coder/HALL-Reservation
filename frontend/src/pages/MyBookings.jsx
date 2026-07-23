@@ -59,8 +59,8 @@ export default function MyBookings() {
 
   const filteredBookings = bookings.filter(b => {
     if (activeTab === 'All') return true;
-    if (activeTab === 'Upcoming') return b.status === 'CONFIRMED' && b.bookingDate >= today;
-    if (activeTab === 'Completed') return b.status === 'CONFIRMED' && b.bookingDate < today;
+    if (activeTab === 'Upcoming') return b.status === 'APPROVED' && b.bookingDate >= today;
+    if (activeTab === 'Completed') return b.status === 'APPROVED' && b.bookingDate < today;
     if (activeTab === 'Cancelled') return b.status === 'CANCELLED';
     return true;
   });
@@ -101,11 +101,8 @@ export default function MyBookings() {
       setEditBooking(null);
       loadData();
     } catch (err) {
-      if (err.response?.status === 409) {
-        toast.error(err.response.data.message || 'Hall conflict detected.');
-      } else {
-        toast.error(err.response?.data?.message || 'Update failed.');
-      }
+      const msg = err.message || err.response?.data?.message || 'Update failed.';
+      toast.error(msg);
     } finally {
       setEditLoading(false);
     }
@@ -129,8 +126,8 @@ export default function MyBookings() {
   // ─── Tab counts ────────────────────────────────────────────────────────────
   const tabCounts = {
     All: bookings.length,
-    Upcoming: bookings.filter(b => b.status === 'CONFIRMED' && b.bookingDate >= today).length,
-    Completed: bookings.filter(b => b.status === 'CONFIRMED' && b.bookingDate < today).length,
+    Upcoming: bookings.filter(b => b.status === 'APPROVED' && b.bookingDate >= today).length,
+    Completed: bookings.filter(b => b.status === 'APPROVED' && b.bookingDate < today).length,
     Cancelled: bookings.filter(b => b.status === 'CANCELLED').length,
   };
 
@@ -189,8 +186,7 @@ export default function MyBookings() {
         <div className="space-y-4">
           {filteredBookings.map(booking => {
             const isPast = booking.bookingDate < today;
-            const isOwner = booking.staffId === user?.id;
-            const canEdit = isOwner && booking.status === 'CONFIRMED' && !isPast;
+            const canEdit = booking.status === 'APPROVED' && !isPast;
 
             return (
               <div key={booking.id}
@@ -204,8 +200,8 @@ export default function MyBookings() {
                     {booking.eventName}
                   </h3>
                   <div className="flex-shrink-0">
-                    {booking.status === 'CONFIRMED' && !isPast && <span className="badge-green">Confirmed</span>}
-                    {booking.status === 'CONFIRMED' && isPast && <span className="badge-blue">Done</span>}
+                    {booking.status === 'APPROVED' && !isPast && <span className="badge-green">Confirmed</span>}
+                    {booking.status === 'APPROVED' && isPast && <span className="badge-blue">Done</span>}
                     {booking.status === 'CANCELLED' && <span className="badge-red">Cancelled</span>}
                   </div>
                 </div>

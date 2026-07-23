@@ -39,14 +39,14 @@ export default function AdminDashboard() {
   };
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const confirmed = allBookings.filter(b => b.status === 'CONFIRMED');
+  const confirmed = allBookings.filter(b => b.status === 'APPROVED');
   const todayBookings = confirmed.filter(b => b.bookingDate === today);
   const upcoming = confirmed.filter(b => b.bookingDate > today);
   const cancelled = allBookings.filter(b => b.status === 'CANCELLED');
 
   // Department stats
   const deptStats = allBookings.reduce((acc, b) => {
-    if (b.status === 'CONFIRMED') {
+    if (b.status === 'APPROVED') {
       const dept = b.department?.split(' ').slice(0, 3).join(' ') || 'Unknown';
       acc[dept] = (acc[dept] || 0) + 1;
     }
@@ -56,7 +56,7 @@ export default function AdminDashboard() {
   const maxCount = sortedDepts[0]?.[1] || 1;
 
   const stats = [
-    { label: 'Total Halls', value: halls.filter(h => h.active).length, icon: Building2, color: 'text-primary-400', bg: 'bg-primary-900/30', border: 'border-primary-800/40' },
+    { label: 'Total Halls', value: halls.filter(h => h.isActive).length, icon: Building2, color: 'text-primary-400', bg: 'bg-primary-900/30', border: 'border-primary-800/40' },
     { label: "Today's Bookings", value: todayBookings.length, icon: CalendarDays, color: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-800/30' },
     { label: 'Upcoming Events', value: upcoming.length, icon: TrendingUp, color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-800/30' },
     { label: 'Total Confirmed', value: confirmed.length, icon: BookOpen, color: 'text-blue-400', bg: 'bg-blue-900/20', border: 'border-blue-800/30' },

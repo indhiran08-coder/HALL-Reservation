@@ -39,10 +39,16 @@ export default function Dashboard() {
     }
   };
 
-  const confirmed = myBookings.filter(b => b.status === 'CONFIRMED');
+  const confirmed = myBookings.filter(b => b.status === 'APPROVED');
   const upcoming = confirmed.filter(b => new Date(b.bookingDate) >= new Date(format(new Date(), 'yyyy-MM-dd')));
-  const available = halls.filter(h => !h.currentlyBooked);
-  const booked = halls.filter(h => h.currentlyBooked);
+  // Compute which halls are currently booked using today's events
+  const now = new Date();
+  const nowTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:00`;
+  const currentlyBookedIds = new Set(
+    todayEvents.filter(e => e.startTime <= nowTime && e.endTime >= nowTime).map(e => e.hallId)
+  );
+  const available = halls.filter(h => !currentlyBookedIds.has(h.id));
+  const booked = halls.filter(h => currentlyBookedIds.has(h.id));
 
   const stats = [
     {
@@ -245,8 +251,8 @@ export default function Dashboard() {
                 </div>
                 {/* Status badge */}
                 <div className="flex-shrink-0">
-                  {b.status === 'CONFIRMED' && new Date(b.bookingDate) >= new Date(format(new Date(), 'yyyy-MM-dd')) && <span className="badge-green">Confirmed</span>}
-                  {b.status === 'CONFIRMED' && new Date(b.bookingDate) < new Date(format(new Date(), 'yyyy-MM-dd')) && <span className="badge-blue">Done</span>}
+                  {b.status === 'APPROVED' && new Date(b.bookingDate) >= new Date(format(new Date(), 'yyyy-MM-dd')) && <span className="badge-green">Confirmed</span>}
+                  {b.status === 'APPROVED' && new Date(b.bookingDate) < new Date(format(new Date(), 'yyyy-MM-dd')) && <span className="badge-blue">Done</span>}
                   {b.status === 'CANCELLED' && <span className="badge-red">Cancelled</span>}
                 </div>
               </div>

@@ -1,17 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, UserPlus, Building2, AlertCircle } from 'lucide-react';
+import { UserPlus, Building2, AlertCircle } from 'lucide-react';
 
 export default function Register() {
-  const [form, setForm] = useState({
-    fullName: '', department: '', email: '', password: '', confirmPassword: ''
-  });
-  const [showPass, setShowPass] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [form, setForm] = useState({ fullName: '', department: '', email: '' });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const { sendRegisterOtp } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -22,21 +19,11 @@ export default function Register() {
   const validate = () => {
     const newErrors = {};
     if (!form.fullName.trim()) newErrors.fullName = 'Full name is required';
-    if (!form.department) newErrors.department = 'Department is required';
+    if (!form.department.trim()) newErrors.department = 'Department is required';
     if (!form.email) {
       newErrors.email = 'Email is required';
     } else if (!form.email.endsWith('@velalarengg.ac.in')) {
-      newErrors.email = 'Registration is restricted to official Velalar College email addresses (@velalarengg.ac.in).';
-    }
-    if (!form.password) {
-      newErrors.password = 'Password is required';
-    } else if (form.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(form.password)) {
-      newErrors.password = 'Must contain uppercase, lowercase, and a number';
-    }
-    if (form.password !== form.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      newErrors.email = 'Only @velalarengg.ac.in email addresses are accepted.';
     }
     return newErrors;
   };
@@ -48,12 +35,24 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await authAPI.register(form);
-      toast.success('Registration successful! Check your email for the OTP.');
-      navigate('/verify-otp', { state: { email: form.email } });
+      const { error } = await sendRegisterOtp({
+        email: form.email.trim().toLowerCase(),
+        fullName: form.fullName.trim(),
+        department: form.department.trim(),
+      });
+      if (error) {
+        if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+          toast.error('This email is already registered. Please log in.');
+          navigate('/login');
+        } else {
+          toast.error(error.message || 'Registration failed');
+        }
+        return;
+      }
+      toast.success('OTP sent! Check your email to complete registration.');
+      navigate('/verify-otp', { state: { email: form.email, mode: 'register' } });
     } catch (err) {
-      const msg = err.response?.data?.message || 'Registration failed.';
-      toast.error(msg);
+      toast.error('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -81,7 +80,7 @@ export default function Register() {
         <div className="card">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-white">Create Account</h2>
-            <p className="text-slate-400 mt-1">Register with your college email address</p>
+            <p className="text-slate-400 mt-1">Register with your college email — no password needed!</p>
           </div>
 
           {/* Domain restriction notice */}
@@ -89,6 +88,7 @@ export default function Register() {
             <AlertCircle className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-primary-200">
               Only <strong>@velalarengg.ac.in</strong> email addresses are accepted.
+              You'll receive a one-time code to verify your email.
             </p>
           </div>
 
@@ -116,7 +116,7 @@ export default function Register() {
               <div className="relative">
                 <input name="email" type="email" value={form.email} onChange={handleChange}
                   placeholder="yourname@velalarengg.ac.in"
-                  className={`form-input pr-10 ${emailInvalid ? 'border-red-500 focus:ring-red-500' : ''} 
+                  className={`form-input pr-10 ${emailInvalid ? 'border-red-500 focus:ring-red-500' : ''}
                                ${emailValid ? 'border-green-500 focus:ring-green-500' : ''}`} />
                 {emailValid && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-lg">✓</span>
@@ -125,41 +125,11 @@ export default function Register() {
               {errors.email && <p className="form-error">⚠ {errors.email}</p>}
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="form-label">Password</label>
-              <div className="relative">
-                <input name="password" type={showPass ? 'text' : 'password'} value={form.password}
-                  onChange={handleChange} placeholder="Min. 8 chars, with uppercase & number"
-                  className="form-input pr-12" />
-                <button type="button" onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors">
-                  {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.password && <p className="form-error">⚠ {errors.password}</p>}
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label className="form-label">Confirm Password</label>
-              <div className="relative">
-                <input name="confirmPassword" type={showConfirm ? 'text' : 'password'}
-                  value={form.confirmPassword} onChange={handleChange}
-                  placeholder="Re-enter your password" className="form-input pr-12" />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors">
-                  {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.confirmPassword && <p className="form-error">⚠ {errors.confirmPassword}</p>}
-            </div>
-
             <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
               {loading ? (
-                <><span className="spinner" /> Registering...</>
+                <><span className="spinner" /> Sending OTP...</>
               ) : (
-                <><UserPlus className="w-5 h-5" /> Create Account</>
+                <><UserPlus className="w-5 h-5" /> Register & Send OTP</>
               )}
             </button>
           </form>

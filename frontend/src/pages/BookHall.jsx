@@ -117,18 +117,21 @@ export default function BookHall() {
         startTime: form.startTime + ':00',
         endTime: form.endTime + ':00',
       };
-      const res = await bookingAPI.create(payload);
+      await bookingAPI.create(payload);
       toast.success('🎉 Hall booked successfully!');
       navigate('/my-bookings');
     } catch (err) {
-      if (err.response?.status === 409) {
-        // Conflict detected — show alternatives
-        const data = err.response.data;
-        setConflictInfo(data.message);
-        setSuggestedHalls(data.data?.availableHalls || []);
-        toast.error(data.message);
+      const msg = err.response?.data?.message || err.message || 'Booking failed.';
+      if (msg.includes('already booked') || msg.includes('conflict')) {
+        setConflictInfo(msg);
+        // Load available halls for suggestions
+        try {
+          const res = await hallAPI.getAvailable(form.bookingDate, form.startTime + ':00', form.endTime + ':00');
+          setSuggestedHalls(res.data.data || []);
+        } catch { /* ignore */ }
+        toast.error(msg);
       } else {
-        toast.error(err.response?.data?.message || 'Booking failed. Please try again.');
+        toast.error(msg);
       }
     } finally {
       setLoading(false);
