@@ -2,33 +2,46 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Mail, LogIn, Building2 } from 'lucide-react';
+import { Phone, LogIn, Building2 } from 'lucide-react';
+
+// Validate Indian mobile numbers (10 digits, optional +91 or 0 prefix)
+function parsePhone(raw) {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+  if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`;
+  return null; // invalid
+}
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const { sendLoginOtp } = useAuth();
+  const { sendPhoneOtp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email.trim()) { toast.error('Please enter your email'); return; }
+    if (!phone.trim()) { toast.error('Please enter your mobile number'); return; }
+
+    const e164Phone = parsePhone(phone);
+    if (!e164Phone) {
+      toast.error('Enter a valid 10-digit Indian mobile number');
+      return;
+    }
 
     setLoading(true);
     try {
-      const { error } = await sendLoginOtp(email.trim().toLowerCase());
+      const { error } = await sendPhoneOtp(e164Phone);
       if (error) {
-        // "User not found" means they need to register
         if (error.message?.includes('not found') || error.message?.includes('not exist')) {
-          toast.error('No account found. Please register first.');
+          toast.error('No account found with this number. Please register first.');
         } else {
           toast.error(error.message || 'Failed to send OTP');
         }
         return;
       }
-      toast.success('OTP sent to your email!');
-      // Pass email and mode to OTP page
-      navigate('/verify-otp', { state: { email, mode: 'login' } });
+      toast.success('OTP sent to your phone via SMS!');
+      navigate('/verify-otp', { state: { phone: e164Phone, isRegister: false } });
     } catch (err) {
       toast.error('Something went wrong. Please try again.');
     } finally {
@@ -85,24 +98,29 @@ export default function Login() {
           <div className="card">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white">Welcome back</h2>
-              <p className="text-slate-400 mt-1">Enter your college email to receive a sign-in code</p>
+              <p className="text-slate-400 mt-1">Enter your mobile number to receive a sign-in code via SMS</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="form-label">College Email</label>
+                <label className="form-label">Mobile Number</label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+                    <Phone className="w-4 h-4 text-slate-400" />
+                    <span className="text-slate-400 text-sm font-medium">+91</span>
+                  </div>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="yourname@velalarengg.ac.in"
-                    className="form-input pl-10"
-                    autoComplete="email"
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder="98765 43210"
+                    className="form-input pl-16"
+                    autoComplete="tel"
+                    maxLength={15}
                     required
                   />
                 </div>
+                <p className="text-xs text-slate-500 mt-1.5">A 6-digit OTP will be sent to this number via SMS</p>
               </div>
 
               <button type="submit" disabled={loading} className="btn-primary w-full mt-2">

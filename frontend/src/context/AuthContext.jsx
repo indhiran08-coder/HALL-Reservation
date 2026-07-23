@@ -39,49 +39,52 @@ export const AuthProvider = ({ children }) => {
 
   // ── Auth actions ──────────────────────────────────────────────────────────
 
-  /** Send OTP for login (user must already exist) */
-  const sendLoginOtp = async (email) => {
+  /**
+   * Send SMS OTP to a phone number.
+   * Works for both login and registration.
+   * Phone must be in E.164 format, e.g. +919876543210
+   */
+  const sendPhoneOtp = async (phone) => {
     const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
-    return { error };
-  };
-
-  /** Send OTP for registration (creates auth user, stores metadata) */
-  const sendRegisterOtp = async ({ email, fullName, department }) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
+      phone,
       options: {
+        // shouldCreateUser: true allows new users to register via phone
         shouldCreateUser: true,
-        data: { full_name: fullName, department },
       },
     });
     return { error };
   };
 
-  /** Verify OTP — works for both login & registration */
-  const verifyOtp = async (email, token) => {
+  /**
+   * Verify the 6-digit SMS OTP.
+   * @param {string} phone  - E.164 phone number
+   * @param {string} token  - 6-digit code from SMS
+   * @param {boolean} isRegister - true if this is a new registration
+   * @param {object} userData    - { fullName, department, email, phone } for new profile creation
+   */
+  const verifyPhoneOtp = async (phone, token, isRegister = false, userData = {}) => {
     const { data, error } = await supabase.auth.verifyOtp({
-      email,
+      phone,
       token,
-      type: 'email',
+      type: 'sms',
     });
-    if (!error && data.user) {
-      // Create profile if it doesn't exist yet (first-time registration)
+
+    if (!error && data?.user) {
+      // Check if a profile already exists
       const { data: existing } = await supabase
         .from('profiles')
         .select('id')
         .eq('id', data.user.id)
         .single();
 
-      if (!existing) {
-        const meta = data.user.user_metadata;
+      if (!existing && isRegister) {
+        // First-time registration — create the profile row
         await supabase.from('profiles').insert({
           id: data.user.id,
-          full_name: meta?.full_name || '',
-          email: data.user.email,
-          department: meta?.department || '',
+          full_name: userData.fullName || '',
+          email: userData.email || '',
+          department: userData.department || '',
+          phone: phone,
           role: 'STAFF',
         });
       }
@@ -106,6 +109,7 @@ export const AuthProvider = ({ children }) => {
         fullName: profile.full_name,
         email: profile.email,
         department: profile.department,
+        phone: profile.phone,
         role: profile.role,
       }
     : null;
@@ -117,15 +121,17 @@ export const AuthProvider = ({ children }) => {
         supabaseUser: user,
         profile,
         loading,
-        sendLoginOtp,
-        sendRegisterOtp,
-        verifyOtp,
+        sendPhoneOtp,
+        verifyPhoneOtp,
         logout,
         isAdmin,
         isAuthenticated,
-        // Legacy compat for older pages
+        // Legacy compat stubs — no longer used but kept to avoid import errors
         login: () => {},
         token: user ? 'supabase-session' : null,
+        sendLoginOtp: sendPhoneOtp,       // alias — login now uses phone
+        sendRegisterOtp: sendPhoneOtp,    // alias — kept for safety
+        verifyOtp: () => Promise.resolve({ error: new Error('Use verifyPhoneOtp') }),
       }}
     >
       {children}

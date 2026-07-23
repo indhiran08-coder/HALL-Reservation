@@ -2,13 +2,27 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { UserPlus, Building2, AlertCircle } from 'lucide-react';
+import { UserPlus, Building2, Phone } from 'lucide-react';
+
+// Validate Indian mobile numbers (10 digits, optional +91 or 0 prefix)
+function parsePhone(raw) {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+  if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`;
+  return null; // invalid
+}
 
 export default function Register() {
-  const [form, setForm] = useState({ fullName: '', department: '', email: '' });
+  const [form, setForm] = useState({
+    fullName: '',
+    department: '',
+    email: '',
+    phone: '',
+  });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const { sendRegisterOtp } = useAuth();
+  const { sendPhoneOtp } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -22,8 +36,13 @@ export default function Register() {
     if (!form.department.trim()) newErrors.department = 'Department is required';
     if (!form.email) {
       newErrors.email = 'Email is required';
-    } else if (!form.email.endsWith('@velalarengg.ac.in')) {
-      newErrors.email = 'Only @velalarengg.ac.in email addresses are accepted.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = 'Please enter a valid email address.';
+    }
+    if (!form.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else if (!parsePhone(form.phone)) {
+      newErrors.phone = 'Enter a valid 10-digit Indian mobile number';
     }
     return newErrors;
   };
@@ -33,24 +52,27 @@ export default function Register() {
     const newErrors = validate();
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
+    const e164Phone = parsePhone(form.phone);
     setLoading(true);
     try {
-      const { error } = await sendRegisterOtp({
-        email: form.email.trim().toLowerCase(),
-        fullName: form.fullName.trim(),
-        department: form.department.trim(),
-      });
+      const { error } = await sendPhoneOtp(e164Phone);
       if (error) {
-        if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
-          toast.error('This email is already registered. Please log in.');
-          navigate('/login');
-        } else {
-          toast.error(error.message || 'Registration failed');
-        }
+        toast.error(error.message || 'Failed to send OTP. Please try again.');
         return;
       }
-      toast.success('OTP sent! Check your email to complete registration.');
-      navigate('/verify-otp', { state: { email: form.email, mode: 'register' } });
+      toast.success('OTP sent to your phone!');
+      navigate('/verify-otp', {
+        state: {
+          phone: e164Phone,
+          isRegister: true,
+          userData: {
+            fullName: form.fullName.trim(),
+            department: form.department.trim(),
+            email: form.email.trim().toLowerCase(),
+            phone: e164Phone,
+          },
+        },
+      });
     } catch (err) {
       toast.error('Something went wrong. Please try again.');
     } finally {
@@ -58,8 +80,8 @@ export default function Register() {
     }
   };
 
-  const emailValid = form.email && form.email.endsWith('@velalarengg.ac.in');
-  const emailInvalid = form.email && !form.email.endsWith('@velalarengg.ac.in');
+  const emailValid = form.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
+  const emailInvalid = form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
@@ -80,15 +102,14 @@ export default function Register() {
         <div className="card">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-white">Create Account</h2>
-            <p className="text-slate-400 mt-1">Register with your college email — no password needed!</p>
+            <p className="text-slate-400 mt-1">Register and verify via SMS — no password needed!</p>
           </div>
 
-          {/* Domain restriction notice */}
+          {/* Info notice */}
           <div className="flex items-start gap-3 p-4 bg-primary-900/30 border border-primary-800/50 rounded-xl mb-6">
-            <AlertCircle className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" />
+            <Phone className="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-primary-200">
-              Only <strong>@velalarengg.ac.in</strong> email addresses are accepted.
-              You'll receive a one-time code to verify your email.
+              Enter your mobile number. You'll receive a 6-digit OTP via SMS to verify your identity.
             </p>
           </div>
 
@@ -110,9 +131,11 @@ export default function Register() {
               {errors.department && <p className="form-error">⚠ {errors.department}</p>}
             </div>
 
-            {/* Email */}
+            {/* Email (for records only) */}
             <div>
-              <label className="form-label">College Email</label>
+              <label className="form-label">
+                College Email <span className="text-slate-500 font-normal text-xs">(for records only)</span>
+              </label>
               <div className="relative">
                 <input name="email" type="email" value={form.email} onChange={handleChange}
                   placeholder="yourname@velalarengg.ac.in"
@@ -125,11 +148,34 @@ export default function Register() {
               {errors.email && <p className="form-error">⚠ {errors.email}</p>}
             </div>
 
+            {/* Phone Number */}
+            <div>
+              <label className="form-label">Mobile Number</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+                  <Phone className="w-4 h-4 text-slate-400" />
+                  <span className="text-slate-400 text-sm font-medium">+91</span>
+                </div>
+                <input
+                  name="phone"
+                  type="tel"
+                  value={form.phone}
+                  onChange={handleChange}
+                  placeholder="98765 43210"
+                  maxLength={15}
+                  className="form-input pl-16"
+                  autoComplete="tel"
+                />
+              </div>
+              {errors.phone && <p className="form-error">⚠ {errors.phone}</p>}
+              <p className="text-xs text-slate-500 mt-1.5">OTP will be sent to this number via SMS</p>
+            </div>
+
             <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
               {loading ? (
                 <><span className="spinner" /> Sending OTP...</>
               ) : (
-                <><UserPlus className="w-5 h-5" /> Register & Send OTP</>
+                <><UserPlus className="w-5 h-5" /> Register &amp; Send OTP</>
               )}
             </button>
           </form>

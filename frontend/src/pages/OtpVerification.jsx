@@ -2,7 +2,19 @@ import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Mail, RefreshCw, CheckCircle2, Building2 } from 'lucide-react';
+import { Phone, RefreshCw, CheckCircle2, Building2 } from 'lucide-react';
+
+/** Mask phone: +919876543210 → +91 98765 43210 */
+function maskPhone(e164) {
+  if (!e164) return '';
+  // Strip leading +91 / +1 etc. and show last 10 as XX XXXXX XXXXX
+  const cc = e164.startsWith('+91') ? '+91' : e164.slice(0, 3);
+  const local = e164.slice(cc.length); // 10 digits
+  if (local.length === 10) {
+    return `${cc} ${local.slice(0, 5)} ${local.slice(5)}`;
+  }
+  return e164;
+}
 
 export default function OtpVerification() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -12,16 +24,17 @@ export default function OtpVerification() {
   const inputRefs = useRef([]);
   const location = useLocation();
   const navigate = useNavigate();
-  const { verifyOtp, sendLoginOtp, sendRegisterOtp } = useAuth();
+  const { verifyPhoneOtp, sendPhoneOtp } = useAuth();
 
-  const email = location.state?.email || '';
-  const mode = location.state?.mode || 'login'; // 'login' or 'register'
-  const regData = location.state?.regData; // for re-sending registration OTP
+  // Expect: { phone, isRegister, userData? }
+  const phone = location.state?.phone || '';
+  const isRegister = location.state?.isRegister ?? false;
+  const userData = location.state?.userData || {};
 
   useEffect(() => {
-    if (!email) navigate('/login');
+    if (!phone) navigate('/login');
     else inputRefs.current[0]?.focus();
-  }, [email, navigate]);
+  }, [phone, navigate]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -59,7 +72,7 @@ export default function OtpVerification() {
     }
     setLoading(true);
     try {
-      const { error } = await verifyOtp(email, otpString);
+      const { error } = await verifyPhoneOtp(phone, otpString, isRegister, userData);
       if (error) {
         toast.error(error.message || 'Invalid code. Please try again.');
         setOtp(['', '', '', '', '', '']);
@@ -67,7 +80,6 @@ export default function OtpVerification() {
         return;
       }
       toast.success('✅ Verified! Welcome to VCET Hall Reservation.');
-      // Navigate based on role — AuthContext will redirect properly
       navigate('/dashboard');
     } catch (err) {
       toast.error('Verification failed. Please try again.');
@@ -79,14 +91,9 @@ export default function OtpVerification() {
   const handleResend = async () => {
     setResending(true);
     try {
-      let error;
-      if (mode === 'register' && regData) {
-        ({ error } = await sendRegisterOtp(regData));
-      } else {
-        ({ error } = await sendLoginOtp(email));
-      }
+      const { error } = await sendPhoneOtp(phone);
       if (error) { toast.error(error.message || 'Failed to resend'); return; }
-      toast.success('New code sent to your email!');
+      toast.success('New OTP sent to your phone via SMS!');
       setCountdown(300);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
@@ -113,13 +120,13 @@ export default function OtpVerification() {
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 rounded-3xl bg-primary-900/50 border border-primary-700/50
                             flex items-center justify-center">
-              <Mail className="w-10 h-10 text-primary-400" />
+              <Phone className="w-10 h-10 text-primary-400" />
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Check Your SMS</h2>
           <p className="text-slate-400 mb-2">We've sent a 6-digit code to:</p>
-          <p className="text-primary-400 font-semibold mb-6">{email}</p>
+          <p className="text-primary-400 font-semibold mb-6">{maskPhone(phone)}</p>
 
           {/* OTP Input */}
           <div className="flex gap-3 justify-center mb-6" onPaste={handlePaste}>
@@ -171,7 +178,7 @@ export default function OtpVerification() {
           </button>
 
           <p className="text-slate-500 text-xs mt-4">
-            Check your spam folder if you don't see the email.
+            Didn't receive an SMS? Make sure your phone number is correct and try resending.
           </p>
         </div>
       </div>

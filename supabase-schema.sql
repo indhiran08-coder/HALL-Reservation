@@ -19,6 +19,7 @@ CREATE TABLE profiles (
   full_name TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
   department TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
   role TEXT NOT NULL DEFAULT 'STAFF',
   is_approved BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
