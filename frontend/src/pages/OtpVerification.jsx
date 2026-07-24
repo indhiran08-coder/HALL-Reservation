@@ -2,18 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Phone, Mail, RefreshCw, CheckCircle2, Building2 } from 'lucide-react';
-
-/** Mask phone: +919876543210 → +91 98765 43210 */
-function maskPhone(e164) {
-  if (!e164) return '';
-  const cc = e164.startsWith('+91') ? '+91' : e164.slice(0, 3);
-  const local = e164.slice(cc.length);
-  if (local.length === 10) {
-    return `${cc} ${local.slice(0, 5)} ${local.slice(5)}`;
-  }
-  return e164;
-}
+import { Mail, RefreshCw, CheckCircle2, Building2, Shield } from 'lucide-react';
 
 /** Partially mask email: admin@example.com → ad***@example.com */
 function maskEmail(email) {
@@ -32,23 +21,21 @@ export default function OtpVerification() {
   const inputRefs = useRef([]);
   const location = useLocation();
   const navigate = useNavigate();
-  const { verifyPhoneOtp, sendPhoneOtp, verifyEmailOtp, sendEmailOtp } = useAuth();
+  const { verifyEmailOtp, sendEmailOtp } = useAuth();
 
-  // Route state — one of these will be set:
-  //   Staff:  { phone, isRegister, userData? }
-  //   Admin:  { email, isAdmin: true }
-  const phone    = location.state?.phone    || '';
-  const email    = location.state?.email    || '';
-  const isAdmin  = location.state?.isAdmin  ?? false;
+  // Route state:
+  //   Staff login:    { email, isRegister: false }
+  //   Staff register: { email, isRegister: true, userData: { fullName, department } }
+  //   Admin login:    { email, isAdmin: true, isRegister: false }
+  const email      = location.state?.email      || '';
+  const isAdmin    = location.state?.isAdmin    ?? false;
   const isRegister = location.state?.isRegister ?? false;
-  const userData = location.state?.userData || {};
-
-  const isEmailMode = isAdmin || (!!email && !phone);
+  const userData   = location.state?.userData   || {};
 
   useEffect(() => {
-    if (!phone && !email) navigate('/login');
+    if (!email) navigate('/login');
     else inputRefs.current[0]?.focus();
-  }, [phone, email, navigate]);
+  }, [email, navigate]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -86,15 +73,7 @@ export default function OtpVerification() {
     }
     setLoading(true);
     try {
-      let error;
-      if (isEmailMode) {
-        // Admin: verify email OTP
-        ({ error } = await verifyEmailOtp(email, otpString));
-      } else {
-        // Staff: verify phone SMS OTP
-        ({ error } = await verifyPhoneOtp(phone, otpString, isRegister, userData));
-      }
-
+      const { error } = await verifyEmailOtp(email, otpString, isRegister, userData);
       if (error) {
         toast.error(error.message || 'Invalid code. Please try again.');
         setOtp(['', '', '', '', '', '']);
@@ -113,14 +92,10 @@ export default function OtpVerification() {
   const handleResend = async () => {
     setResending(true);
     try {
-      let error;
-      if (isEmailMode) {
-        ({ error } = await sendEmailOtp(email));
-      } else {
-        ({ error } = await sendPhoneOtp(phone));
-      }
+      // Registration resend needs shouldCreateUser: true; login uses false
+      const { error } = await sendEmailOtp(email, isRegister);
       if (error) { toast.error(error.message || 'Failed to resend'); return; }
-      toast.success(isEmailMode ? 'New code sent to your email!' : 'New OTP sent to your phone via SMS!');
+      toast.success('New OTP sent to your email!');
       setCountdown(300);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
@@ -133,8 +108,8 @@ export default function OtpVerification() {
 
   const formatCountdown = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-  // Colours & icons differ for admin vs staff
-  const isAmber = isEmailMode;
+  // Amber colour scheme for admin, blue for staff
+  const amber = isAdmin;
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
@@ -150,23 +125,21 @@ export default function OtpVerification() {
           {/* Icon */}
           <div className="flex justify-center mb-6">
             <div className={`w-20 h-20 rounded-3xl flex items-center justify-center border
-              ${isAmber
+              ${amber
                 ? 'bg-amber-900/40 border-amber-700/50'
                 : 'bg-primary-900/50 border-primary-700/50'}`}>
-              {isEmailMode
-                ? <Mail className="w-10 h-10 text-amber-400" />
-                : <Phone className="w-10 h-10 text-primary-400" />
+              {amber
+                ? <Shield className="w-10 h-10 text-amber-400" />
+                : <Mail className="w-10 h-10 text-primary-400" />
               }
             </div>
           </div>
 
           {/* Heading */}
-          <h2 className="text-2xl font-bold text-white mb-2">
-            {isEmailMode ? 'Check Your Email' : 'Check Your SMS'}
-          </h2>
-          <p className="text-slate-400 mb-2">We've sent a 6-digit code to:</p>
-          <p className={`font-semibold mb-6 ${isAmber ? 'text-amber-400' : 'text-primary-400'}`}>
-            {isEmailMode ? maskEmail(email) : maskPhone(phone)}
+          <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
+          <p className="text-slate-400 mb-1">We've sent a 6-digit code to:</p>
+          <p className={`font-semibold mb-6 ${amber ? 'text-amber-400' : 'text-primary-400'}`}>
+            {maskEmail(email)}
           </p>
 
           {/* OTP Input */}
@@ -185,16 +158,20 @@ export default function OtpVerification() {
                             bg-slate-900 text-white transition-all duration-200
                             focus:outline-none focus:ring-0
                             ${digit
-                              ? (isAmber ? 'border-amber-500 bg-amber-900/20' : 'border-primary-500 bg-primary-900/20')
+                              ? (amber ? 'border-amber-500 bg-amber-900/20' : 'border-primary-500 bg-primary-900/20')
                               : 'border-slate-700'}
-                            ${isAmber ? 'focus:border-amber-400' : 'focus:border-primary-400'}`}
+                            ${amber ? 'focus:border-amber-400' : 'focus:border-primary-400'}`}
               />
             ))}
           </div>
 
           <p className="text-slate-400 text-sm mb-6">
             {countdown > 0 ? (
-              <>Code expires in <span className={`font-semibold ${isAmber ? 'text-amber-400' : 'text-primary-400'}`}>{formatCountdown(countdown)}</span></>
+              <>Code expires in{' '}
+                <span className={`font-semibold ${amber ? 'text-amber-400' : 'text-primary-400'}`}>
+                  {formatCountdown(countdown)}
+                </span>
+              </>
             ) : (
               <span className="text-red-400">Code has expired. Please request a new one.</span>
             )}
@@ -207,9 +184,10 @@ export default function OtpVerification() {
             className={`w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl
                         font-semibold text-white transition-all duration-200 mb-4
                         disabled:opacity-60 disabled:cursor-not-allowed
-                        ${isAmber
+                        ${amber
                           ? 'bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-900/30'
-                          : 'btn-primary'}`}>
+                          : 'btn-primary'}`}
+          >
             {loading ? (
               <><span className="spinner" /> Verifying...</>
             ) : (
@@ -221,7 +199,8 @@ export default function OtpVerification() {
           <button
             onClick={handleResend}
             disabled={resending || countdown > 0}
-            className="btn-secondary w-full disabled:opacity-40">
+            className="btn-secondary w-full disabled:opacity-40"
+          >
             {resending ? (
               <><span className="spinner" /> Sending...</>
             ) : (
@@ -231,9 +210,7 @@ export default function OtpVerification() {
           </button>
 
           <p className="text-slate-500 text-xs mt-4">
-            {isEmailMode
-              ? 'Check your spam/junk folder if you don\'t see the email.'
-              : 'Didn\'t receive an SMS? Make sure your phone number is correct and try resending.'}
+            Check your spam/junk folder if you don't see the email.
           </p>
         </div>
       </div>

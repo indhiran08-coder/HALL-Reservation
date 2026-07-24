@@ -9,14 +9,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
       else setLoading(false);
     });
 
-    // Listen for login/logout changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setUser(session?.user ?? null);
@@ -40,83 +38,52 @@ export const AuthProvider = ({ children }) => {
   // ── Auth actions ──────────────────────────────────────────────────────────
 
   /**
-   * Send SMS OTP to a phone number.
-   * Works for both login and registration (staff).
-   * Phone must be in E.164 format, e.g. +919876543210
+   * Send email OTP.
+   * @param {string}  email           - recipient email address
+   * @param {boolean} shouldCreateUser - true for new staff registration,
+   *                                     false for existing staff/admin login
    */
-  const sendPhoneOtp = async (phone) => {
+  const sendEmailOtp = async (email, shouldCreateUser = false) => {
     const { error } = await supabase.auth.signInWithOtp({
-      phone,
-      options: {
-        shouldCreateUser: true,
-      },
+      email,
+      options: { shouldCreateUser },
     });
     return { error };
   };
 
   /**
-   * Verify the 6-digit SMS OTP (staff login / registration).
-   * @param {string} phone  - E.164 phone number
-   * @param {string} token  - 6-digit code from SMS
-   * @param {boolean} isRegister - true if this is a new registration
-   * @param {object} userData    - { fullName, department, email, phone } for new profile creation
+   * Verify the 6-digit email OTP.
+   * If isRegister=true and the user is new, a profile row is created.
+   * @param {string}  email      - email address
+   * @param {string}  token      - 6-digit code
+   * @param {boolean} isRegister - true for new staff self-registration
+   * @param {object}  userData   - { fullName, department } for profile creation
    */
-  const verifyPhoneOtp = async (phone, token, isRegister = false, userData = {}) => {
+  const verifyEmailOtp = async (email, token, isRegister = false, userData = {}) => {
     const { data, error } = await supabase.auth.verifyOtp({
-      phone,
+      email,
       token,
-      type: 'sms',
+      type: 'email',
     });
 
-    if (!error && data?.user) {
-      // Check if a profile already exists
+    if (!error && data?.user && isRegister) {
+      // Check if a profile already exists (handles re-verification edge case)
       const { data: existing } = await supabase
         .from('profiles')
         .select('id')
         .eq('id', data.user.id)
         .single();
 
-      if (!existing && isRegister) {
-        // First-time registration — create the profile row
+      if (!existing) {
         await supabase.from('profiles').insert({
           id: data.user.id,
           full_name: userData.fullName || '',
-          email: userData.email || '',
+          email: email,
           department: userData.department || '',
-          phone: phone,
           role: 'STAFF',
         });
       }
     }
-    return { error };
-  };
-
-  /**
-   * Send email magic-link / OTP to an admin's email address.
-   * Admin accounts are pre-created in Supabase Auth → Users.
-   * shouldCreateUser: false ensures only existing admin accounts can sign in.
-   */
-  const sendEmailOtp = async (email) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false, // admins must already exist — no self-registration
-      },
-    });
-    return { error };
-  };
-
-  /**
-   * Verify the 6-digit email OTP (admin login).
-   * @param {string} email - admin email address
-   * @param {string} token - 6-digit code from email
-   */
-  const verifyEmailOtp = async (email, token) => {
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
     return { error };
   };
 
@@ -130,14 +97,12 @@ export const AuthProvider = ({ children }) => {
   const isAdmin = () => profile?.role === 'ADMIN';
   const isAuthenticated = () => !!user && !!profile;
 
-  // Provide a unified `user` shape that the existing pages expect
   const mergedUser = profile
     ? {
         id: profile.id,
         fullName: profile.full_name,
         email: profile.email,
         department: profile.department,
-        phone: profile.phone,
         role: profile.role,
       }
     : null;
@@ -149,19 +114,14 @@ export const AuthProvider = ({ children }) => {
         supabaseUser: user,
         profile,
         loading,
-        sendPhoneOtp,
-        verifyPhoneOtp,
         sendEmailOtp,
         verifyEmailOtp,
         logout,
         isAdmin,
         isAuthenticated,
-        // Legacy compat stubs
+        // Legacy stubs — kept to avoid any stale import errors
         login: () => {},
         token: user ? 'supabase-session' : null,
-        sendLoginOtp: sendPhoneOtp,
-        sendRegisterOtp: sendPhoneOtp,
-        verifyOtp: () => Promise.resolve({ error: new Error('Use verifyPhoneOtp or verifyEmailOtp') }),
       }}
     >
       {children}
