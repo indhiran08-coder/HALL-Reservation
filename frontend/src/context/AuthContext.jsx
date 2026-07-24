@@ -41,14 +41,13 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Send SMS OTP to a phone number.
-   * Works for both login and registration.
+   * Works for both login and registration (staff).
    * Phone must be in E.164 format, e.g. +919876543210
    */
   const sendPhoneOtp = async (phone) => {
     const { error } = await supabase.auth.signInWithOtp({
       phone,
       options: {
-        // shouldCreateUser: true allows new users to register via phone
         shouldCreateUser: true,
       },
     });
@@ -56,7 +55,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Verify the 6-digit SMS OTP.
+   * Verify the 6-digit SMS OTP (staff login / registration).
    * @param {string} phone  - E.164 phone number
    * @param {string} token  - 6-digit code from SMS
    * @param {boolean} isRegister - true if this is a new registration
@@ -92,6 +91,35 @@ export const AuthProvider = ({ children }) => {
     return { error };
   };
 
+  /**
+   * Send email magic-link / OTP to an admin's email address.
+   * Admin accounts are pre-created in Supabase Auth → Users.
+   * shouldCreateUser: false ensures only existing admin accounts can sign in.
+   */
+  const sendEmailOtp = async (email) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false, // admins must already exist — no self-registration
+      },
+    });
+    return { error };
+  };
+
+  /**
+   * Verify the 6-digit email OTP (admin login).
+   * @param {string} email - admin email address
+   * @param {string} token - 6-digit code from email
+   */
+  const verifyEmailOtp = async (email, token) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    });
+    return { error };
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -123,15 +151,17 @@ export const AuthProvider = ({ children }) => {
         loading,
         sendPhoneOtp,
         verifyPhoneOtp,
+        sendEmailOtp,
+        verifyEmailOtp,
         logout,
         isAdmin,
         isAuthenticated,
-        // Legacy compat stubs — no longer used but kept to avoid import errors
+        // Legacy compat stubs
         login: () => {},
         token: user ? 'supabase-session' : null,
-        sendLoginOtp: sendPhoneOtp,       // alias — login now uses phone
-        sendRegisterOtp: sendPhoneOtp,    // alias — kept for safety
-        verifyOtp: () => Promise.resolve({ error: new Error('Use verifyPhoneOtp') }),
+        sendLoginOtp: sendPhoneOtp,
+        sendRegisterOtp: sendPhoneOtp,
+        verifyOtp: () => Promise.resolve({ error: new Error('Use verifyPhoneOtp or verifyEmailOtp') }),
       }}
     >
       {children}

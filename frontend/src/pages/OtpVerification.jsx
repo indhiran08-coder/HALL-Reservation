@@ -2,18 +2,26 @@ import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Phone, RefreshCw, CheckCircle2, Building2 } from 'lucide-react';
+import { Phone, Mail, RefreshCw, CheckCircle2, Building2 } from 'lucide-react';
 
 /** Mask phone: +919876543210 → +91 98765 43210 */
 function maskPhone(e164) {
   if (!e164) return '';
-  // Strip leading +91 / +1 etc. and show last 10 as XX XXXXX XXXXX
   const cc = e164.startsWith('+91') ? '+91' : e164.slice(0, 3);
-  const local = e164.slice(cc.length); // 10 digits
+  const local = e164.slice(cc.length);
   if (local.length === 10) {
     return `${cc} ${local.slice(0, 5)} ${local.slice(5)}`;
   }
   return e164;
+}
+
+/** Partially mask email: admin@example.com → ad***@example.com */
+function maskEmail(email) {
+  if (!email) return '';
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  const visible = local.slice(0, 2);
+  return `${visible}***@${domain}`;
 }
 
 export default function OtpVerification() {
@@ -24,17 +32,23 @@ export default function OtpVerification() {
   const inputRefs = useRef([]);
   const location = useLocation();
   const navigate = useNavigate();
-  const { verifyPhoneOtp, sendPhoneOtp } = useAuth();
+  const { verifyPhoneOtp, sendPhoneOtp, verifyEmailOtp, sendEmailOtp } = useAuth();
 
-  // Expect: { phone, isRegister, userData? }
-  const phone = location.state?.phone || '';
+  // Route state — one of these will be set:
+  //   Staff:  { phone, isRegister, userData? }
+  //   Admin:  { email, isAdmin: true }
+  const phone    = location.state?.phone    || '';
+  const email    = location.state?.email    || '';
+  const isAdmin  = location.state?.isAdmin  ?? false;
   const isRegister = location.state?.isRegister ?? false;
   const userData = location.state?.userData || {};
 
+  const isEmailMode = isAdmin || (!!email && !phone);
+
   useEffect(() => {
-    if (!phone) navigate('/login');
+    if (!phone && !email) navigate('/login');
     else inputRefs.current[0]?.focus();
-  }, [phone, navigate]);
+  }, [phone, email, navigate]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -72,7 +86,15 @@ export default function OtpVerification() {
     }
     setLoading(true);
     try {
-      const { error } = await verifyPhoneOtp(phone, otpString, isRegister, userData);
+      let error;
+      if (isEmailMode) {
+        // Admin: verify email OTP
+        ({ error } = await verifyEmailOtp(email, otpString));
+      } else {
+        // Staff: verify phone SMS OTP
+        ({ error } = await verifyPhoneOtp(phone, otpString, isRegister, userData));
+      }
+
       if (error) {
         toast.error(error.message || 'Invalid code. Please try again.');
         setOtp(['', '', '', '', '', '']);
@@ -81,7 +103,7 @@ export default function OtpVerification() {
       }
       toast.success('✅ Verified! Welcome to VCET Hall Reservation.');
       navigate('/dashboard');
-    } catch (err) {
+    } catch {
       toast.error('Verification failed. Please try again.');
     } finally {
       setLoading(false);
@@ -91,9 +113,14 @@ export default function OtpVerification() {
   const handleResend = async () => {
     setResending(true);
     try {
-      const { error } = await sendPhoneOtp(phone);
+      let error;
+      if (isEmailMode) {
+        ({ error } = await sendEmailOtp(email));
+      } else {
+        ({ error } = await sendPhoneOtp(phone));
+      }
       if (error) { toast.error(error.message || 'Failed to resend'); return; }
-      toast.success('New OTP sent to your phone via SMS!');
+      toast.success(isEmailMode ? 'New code sent to your email!' : 'New OTP sent to your phone via SMS!');
       setCountdown(300);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
@@ -106,6 +133,9 @@ export default function OtpVerification() {
 
   const formatCountdown = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+  // Colours & icons differ for admin vs staff
+  const isAmber = isEmailMode;
+
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <div className="w-full max-w-md animate-slide-up">
@@ -117,16 +147,27 @@ export default function OtpVerification() {
         </div>
 
         <div className="card text-center">
+          {/* Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 rounded-3xl bg-primary-900/50 border border-primary-700/50
-                            flex items-center justify-center">
-              <Phone className="w-10 h-10 text-primary-400" />
+            <div className={`w-20 h-20 rounded-3xl flex items-center justify-center border
+              ${isAmber
+                ? 'bg-amber-900/40 border-amber-700/50'
+                : 'bg-primary-900/50 border-primary-700/50'}`}>
+              {isEmailMode
+                ? <Mail className="w-10 h-10 text-amber-400" />
+                : <Phone className="w-10 h-10 text-primary-400" />
+              }
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Check Your SMS</h2>
+          {/* Heading */}
+          <h2 className="text-2xl font-bold text-white mb-2">
+            {isEmailMode ? 'Check Your Email' : 'Check Your SMS'}
+          </h2>
           <p className="text-slate-400 mb-2">We've sent a 6-digit code to:</p>
-          <p className="text-primary-400 font-semibold mb-6">{maskPhone(phone)}</p>
+          <p className={`font-semibold mb-6 ${isAmber ? 'text-amber-400' : 'text-primary-400'}`}>
+            {isEmailMode ? maskEmail(email) : maskPhone(phone)}
+          </p>
 
           {/* OTP Input */}
           <div className="flex gap-3 justify-center mb-6" onPaste={handlePaste}>
@@ -143,22 +184,32 @@ export default function OtpVerification() {
                 className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border-2
                             bg-slate-900 text-white transition-all duration-200
                             focus:outline-none focus:ring-0
-                            ${digit ? 'border-primary-500 bg-primary-900/20' : 'border-slate-700'}
-                            focus:border-primary-400`}
+                            ${digit
+                              ? (isAmber ? 'border-amber-500 bg-amber-900/20' : 'border-primary-500 bg-primary-900/20')
+                              : 'border-slate-700'}
+                            ${isAmber ? 'focus:border-amber-400' : 'focus:border-primary-400'}`}
               />
             ))}
           </div>
 
           <p className="text-slate-400 text-sm mb-6">
             {countdown > 0 ? (
-              <>Code expires in <span className="text-primary-400 font-semibold">{formatCountdown(countdown)}</span></>
+              <>Code expires in <span className={`font-semibold ${isAmber ? 'text-amber-400' : 'text-primary-400'}`}>{formatCountdown(countdown)}</span></>
             ) : (
               <span className="text-red-400">Code has expired. Please request a new one.</span>
             )}
           </p>
 
-          <button onClick={handleVerify} disabled={loading || otp.join('').length !== 6}
-            className="btn-primary w-full mb-4">
+          {/* Verify button */}
+          <button
+            onClick={handleVerify}
+            disabled={loading || otp.join('').length !== 6}
+            className={`w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl
+                        font-semibold text-white transition-all duration-200 mb-4
+                        disabled:opacity-60 disabled:cursor-not-allowed
+                        ${isAmber
+                          ? 'bg-amber-600 hover:bg-amber-500 shadow-lg shadow-amber-900/30'
+                          : 'btn-primary'}`}>
             {loading ? (
               <><span className="spinner" /> Verifying...</>
             ) : (
@@ -166,7 +217,9 @@ export default function OtpVerification() {
             )}
           </button>
 
-          <button onClick={handleResend}
+          {/* Resend button */}
+          <button
+            onClick={handleResend}
             disabled={resending || countdown > 0}
             className="btn-secondary w-full disabled:opacity-40">
             {resending ? (
@@ -178,7 +231,9 @@ export default function OtpVerification() {
           </button>
 
           <p className="text-slate-500 text-xs mt-4">
-            Didn't receive an SMS? Make sure your phone number is correct and try resending.
+            {isEmailMode
+              ? 'Check your spam/junk folder if you don\'t see the email.'
+              : 'Didn\'t receive an SMS? Make sure your phone number is correct and try resending.'}
           </p>
         </div>
       </div>
