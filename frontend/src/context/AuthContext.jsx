@@ -43,18 +43,52 @@ export const AuthProvider = ({ children }) => {
    * @param {boolean} shouldCreateUser - true for new staff registration,
    *                                     false for existing staff/admin login
    */
+  /**
+   * Send an OTP to `email`.
+   * For registration (shouldCreateUser=true): we first create the auth user with
+   * a random password (which avoids the "Confirm Signup" email that triggers 500),
+   * then immediately send a plain OTP — same template as admin login.
+   * For login (shouldCreateUser=false): just sends OTP to existing user.
+   */
   const sendEmailOtp = async (email, shouldCreateUser = false) => {
+    // ── REGISTRATION PATH ────────────────────────────────────────────────────
+    if (shouldCreateUser) {
+      // Step 1: create the auth user silently (no confirmation email sent)
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: crypto.randomUUID(), // random — user will never enter this
+        options: { emailRedirectTo: undefined }, // suppress confirmation email
+      });
+
+      // Ignore "User already registered" — they may be re-registering after a failed attempt
+      const isExistingUser =
+        signUpError?.message?.toLowerCase().includes('already registered') ||
+        signUpError?.message?.toLowerCase().includes('already exists') ||
+        signUpError?.status === 400;
+
+      if (signUpError && !isExistingUser) {
+        console.error('[sendEmailOtp] signUp error:', signUpError);
+        return {
+          error: {
+            ...signUpError,
+            message:
+              signUpError.message ||
+              'Failed to create account. Please try again.',
+          },
+        };
+      }
+    }
+
+    // ── SEND OTP (works for both new and existing users) ────────────────────
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser },
+      options: { shouldCreateUser: false }, // user already exists at this point
     });
 
     if (error) {
-      // Log full error so it's visible in browser DevTools → Console
-      console.error('[sendEmailOtp] Supabase error:', error);
+      console.error('[sendEmailOtp] OTP send error:', error);
     }
 
-    // Normalise: extract a readable message from any error shape Supabase returns
     const normalisedError = error
       ? {
           ...error,
