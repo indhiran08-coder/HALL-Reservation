@@ -48,7 +48,26 @@ export const AuthProvider = ({ children }) => {
       email,
       options: { shouldCreateUser },
     });
-    return { error };
+
+    if (error) {
+      // Log full error so it's visible in browser DevTools → Console
+      console.error('[sendEmailOtp] Supabase error:', error);
+    }
+
+    // Normalise: extract a readable message from any error shape Supabase returns
+    const normalisedError = error
+      ? {
+          ...error,
+          message:
+            error.message ||
+            error.error_description ||
+            error.msg ||
+            (typeof error === 'string' ? error : JSON.stringify(error)) ||
+            'Unknown error — check browser console for details',
+        }
+      : null;
+
+    return { error: normalisedError };
   };
 
   /**
