@@ -78,7 +78,10 @@ export const AuthProvider = ({ children }) => {
         await supabase.from('profiles').insert({
           id: data.user.id,
           full_name: userData.fullName || '',
-          email: email,
+          // Store the college email in the profile for records/display.
+          // `email` param here is the personal email (Supabase auth identity).
+          // userData.collegeEmail holds the @velalarengg.ac.in address.
+          email: userData.collegeEmail || email,
           department: userData.department || '',
           role: 'STAFF',
         });

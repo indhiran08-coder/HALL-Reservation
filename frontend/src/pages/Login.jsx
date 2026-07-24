@@ -27,17 +27,14 @@ export default function Login() {
       return;
     }
 
-    // Staff must use college domain
-    if (tab === 'staff' && !isCollegeEmail(trimmed)) {
-      toast.error(`Only @${COLLEGE_DOMAIN} email addresses are accepted for staff login`);
-      return;
-    }
-
     // Basic email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       toast.error('Please enter a valid email address');
       return;
     }
+
+    // Admin must not use a personal Gmail — no restriction, but we keep the note
+    // Staff uses personal email (no domain restriction — college domain can't receive OTP)
 
     setLoading(true);
     try {
@@ -51,7 +48,7 @@ export default function Login() {
         ) {
           toast.error(
             tab === 'staff'
-              ? 'No account found. Please register first.'
+              ? 'No account found with this email. Please register first.'
               : 'No admin account found. Contact your system administrator.'
           );
         } else {
@@ -128,7 +125,7 @@ export default function Login() {
               <h2 className="text-2xl font-bold text-white">Welcome back</h2>
               <p className="text-slate-400 mt-1">
                 {isStaff
-                  ? `Sign in with your @${COLLEGE_DOMAIN} email`
+                  ? 'Enter the personal email you used when registering'
                   : 'Admin sign-in — enter your configured email'}
               </p>
             </div>
@@ -165,7 +162,7 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="form-label">
-                  {isStaff ? 'College Email' : 'Admin Email'}
+                  {isStaff ? 'Personal Email' : 'Admin Email'}
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -174,7 +171,7 @@ export default function Login() {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder={isStaff
-                      ? `yourname@${COLLEGE_DOMAIN}`
+                      ? 'yourname@gmail.com'
                       : 'admin@velalarengg.ac.in'}
                     className="form-input pl-10"
                     autoComplete="email"
@@ -182,10 +179,10 @@ export default function Login() {
                   />
                 </div>
 
-                {/* Staff domain hint */}
+                {/* Staff hint */}
                 {isStaff && (
                   <p className="text-xs text-slate-500 mt-1.5">
-                    Only <span className="text-primary-400 font-medium">@{COLLEGE_DOMAIN}</span> addresses are accepted
+                    Use the <span className="text-primary-400 font-medium">personal email</span> you provided during registration
                   </p>
                 )}
               </div>
